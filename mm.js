@@ -45,7 +45,7 @@ const VOICES = [
   { id: "dadi_f", persona: "Dadi Storyteller", gender: "female", emoji: "👵", lang: "hi-IN", pitch: 1.12, rate: 0.80, patterns: ["hindi", "india", "hi-in", "heera"], pause: 240 }
 ];
 
-const CATEGORIES = [
+let CATEGORIES = [
   ["all", "All India", "🇮🇳"],
   ["hindi", "हिंदी मीम्स", "🕉️"],
   ["desi", "Desi India", "🇮🇳"],
@@ -98,7 +98,9 @@ const INDIAN_CATEGORIES = new Set([
   "funny", "trending", "desi", "hindi", "genz", "bollywood", "cricket",
   "politics", "science", "tech", "gaming", "love", "student"
 ]);
-const MAIN_MEMES = MEMES.concat(EXTRA_MEMES).filter(m => INDIAN_CATEGORIES.has(m.category));
+let MAIN_MEMES = MEMES.concat(EXTRA_MEMES).filter(m => INDIAN_CATEGORIES.has(m.category));
+let radioMemes = MAIN_MEMES;
+let motdPinnedId = null;
 
 const ARENAS = [
   ["😂 Laugh Sabha", "a-orange", "comic_m"],
@@ -365,8 +367,9 @@ renderGrid();
 /* ---- meme of the day ---- */
 function renderMotd() {
   const pool = MAIN_MEMES;
+  const pinned = motdPinnedId ? pool.find(x => x.id === motdPinnedId) : null;
   const dayIndex = Math.floor(Date.now() / 86400000) % pool.length;
-  const m = pool[dayIndex];
+  const m = pinned || pool[dayIndex];
   document.getElementById("motdCard").innerHTML = `
     <h3>${escapeHtml(m.title)}</h3>
     <p style="color:#ddd7cf">${escapeHtml(m.text)}</p>
@@ -388,10 +391,11 @@ let rIdx = 0;
 let radioPlaying = false;
 
 function renderRadio() {
-  const m = MAIN_MEMES[rIdx];
+  const m = radioMemes[rIdx];
+  if (!m) return;
   document.getElementById("radioTitle").textContent = m.title;
   document.getElementById("radioText").textContent = m.text;
-  document.getElementById("radioIdx").textContent = `Track ${rIdx + 1} / ${MAIN_MEMES.length}`;
+  document.getElementById("radioIdx").textContent = `Track ${rIdx + 1} / ${radioMemes.length}`;
 }
 
 function renderRadioButton() {
@@ -404,10 +408,11 @@ function renderRadioButton() {
 
 function playRadio() {
   radioPlaying = true;
-  const m = MAIN_MEMES[rIdx];
+  const m = radioMemes[rIdx];
+  if (!m) { radioPlaying = false; return; }
   speak("radio", "You are listening to Meme FM sixty nine point nine. " + m.text, "rj_m", 1, () => {
     if (!radioPlaying) return;
-    rIdx = (rIdx + 1) % MAIN_MEMES.length;
+    rIdx = (rIdx + 1) % radioMemes.length;
     renderRadio();
     playRadio();
   });
@@ -417,7 +422,7 @@ document.getElementById("radioPlay").onclick = () => {
 };
 
 document.getElementById("radioNext").onclick = () => {
-  rIdx = (rIdx + 1) % MAIN_MEMES.length;
+  rIdx = (rIdx + 1) % radioMemes.length;
   renderRadio();
   if (radioPlaying) playRadio();
 };
@@ -558,7 +563,7 @@ document.getElementById("userMemeGrid").onclick = e => {
   currentId === m.id ? stopSpeak() : speak(m.id, m.text, voiceSel.value, speedVal);
 };
 
-document.getElementById("subBtn").onclick = () => {
+document.getElementById("subBtn").onclick = async () => {
   const title = document.getElementById("subTitle").value.trim();
   const text = document.getElementById("subText").value.trim();
   const creatorRaw = document.getElementById("subCreator").value.trim();
@@ -571,22 +576,25 @@ document.getElementById("subBtn").onclick = () => {
     return;
   }
   const creator = creatorRaw ? (creatorRaw.startsWith("@") ? creatorRaw : "@" + creatorRaw) : "@anonymous";
-  const meme = {
-    id: "u" + Date.now(),
-    title, text, category: cat, creator,
-    likes: 0, plays: 0, userSubmitted: true
-  };
-  userMemes.push(meme);
-  saveJSON(LS_KEYS.userMemes, userMemes);
-
-  document.getElementById("subTitle").value = "";
-  document.getElementById("subText").value = "";
-  document.getElementById("subCreator").value = "";
-  msg.textContent = "✅ Submit ho gaya! Neeche dekho aur Feed me bhi mil jaayega.";
-  msg.style.color = "var(--green)";
-
-  renderUserGrid();
-  renderGrid();
+  try {
+    const res = await fetch("/api/public/petitions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title, text, category: cat, creator }) });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || "Submit fail ho gaya.");
+    msg.textContent = "✅ " + data.message;
+    msg.style.color = "var(--green)";
+    document.getElementById("subTitle").value = "";
+    document.getElementById("subText").value = "";
+    document.getElementById("subCreator").value = "";
+  } catch (err) {
+    /* server unreachable — fall back to local-only preview so the page still works */
+    const meme = { id: "u" + Date.now(), title, text, category: cat, creator, likes: 0, plays: 0, userSubmitted: true };
+    userMemes.push(meme);
+    saveJSON(LS_KEYS.userMemes, userMemes);
+    msg.textContent = "✅ Submit ho gaya (local preview). Neeche dekho.";
+    msg.style.color = "var(--green)";
+    renderUserGrid();
+    renderGrid();
+  }
 };
 
 renderUserGrid();
@@ -601,4 +609,54 @@ document.querySelectorAll("[data-jump]").forEach(b => {
   };
 });
 
-const ELEVENLABS_API_KEY=your_private_key_here
+const ELEVENLABS_API_KEY = ""; // not used — browser-native speechSynthesis handles narration
+
+/* ---------------------------------------------------------------------
+   Live sync with the admin-managed backend (memes, ministries, ticker,
+   MOTD pin, maintenance mode). Falls back to the static content above
+   if the server is unreachable, so the page still works standalone.
+   --------------------------------------------------------------------- */
+function showMaintenanceOverlay(message, title) {
+  const overlay = document.createElement("div");
+  overlay.style.cssText = "position:fixed;inset:0;z-index:9999;background:#0e100f;color:#f7f2e9;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;font-family:'Space Grotesk',sans-serif;";
+  overlay.innerHTML = `<div><div style="font-size:13px;letter-spacing:2px;text-transform:uppercase;color:#ffad3d;">Maintenance</div><h1 style="font-family:'Bebas Neue',sans-serif;font-size:48px;margin:10px 0;">${escapeHtml(title || "MemeMantri")}</h1><p style="color:#a8afa9;max-width:480px;margin:auto">${escapeHtml(message || "Site abhi maintenance mein hai.")}</p></div>`;
+  document.body.appendChild(overlay);
+}
+async function syncWithServer() {
+  let site, memes;
+  try {
+    [site, memes] = await Promise.all([
+      fetch("/api/public/site").then(r => r.json()),
+      fetch("/api/public/memes").then(r => r.json())
+    ]);
+  } catch { return; /* server unreachable — keep static fallback content */ }
+
+  if (site.maintenance) { showMaintenanceOverlay(site.maintenanceMessage, site.siteTitle); return; }
+
+  if (site.siteTitle) document.title = document.title.replace(/^[^—]+/, site.siteTitle + " ");
+  const taglineEl = document.getElementById("siteTagline");
+  if (taglineEl && site.tagline) taglineEl.textContent = site.tagline;
+
+  if (Array.isArray(site.ministries) && site.ministries.length) {
+    CATEGORIES = [["all", "All India", "🇮🇳"], ...site.ministries];
+  }
+  if (Array.isArray(memes) && memes.length) {
+    MAIN_MEMES = memes.map(m => ({ id: "srv" + m.id, title: m.title, category: m.category, creator: m.creator, text: m.text, likes: m.likes || 0, plays: m.plays || 0, _radio: !!m.radio_enabled }));
+    radioMemes = MAIN_MEMES.filter(m => m._radio);
+    if (!radioMemes.length) radioMemes = MAIN_MEMES;
+  }
+  motdPinnedId = site.motdMemeId ? "srv" + site.motdMemeId : null;
+
+  if (Array.isArray(site.ticker) && site.ticker.length) {
+    document.getElementById("ticker").innerHTML = [0, 1].map(() => site.ticker.map(t => `<span>${escapeHtml(t)}</span>`).join("")).join("");
+  }
+
+  chips.innerHTML = CATEGORIES.map(([id, l, e]) => `<button class="chip${id === category ? " active" : ""}" data-cat="${id}">${e} ${l}</button>`).join("");
+  subCategory.innerHTML = CATEGORIES.filter(([id]) => id !== "all").map(([id, l, e]) => `<option value="${id}">${e} ${l}</option>`).join("");
+  rIdx = 0;
+  renderGrid();
+  renderMotd();
+  renderRadio();
+  renderUserGrid();
+}
+syncWithServer();
