@@ -425,33 +425,80 @@ document.getElementById("radioNext").onclick = () => {
 renderRadio();
 renderRadioButton();
 
-/* ---- battle ---- */
-let bIdx = 4;
-let votes = { A: 0, B: 0 };
-
-function renderBattle() {
-  document.getElementById("battleText").textContent = MAIN_MEMES[bIdx].text;
+/* ---- 24-hour VoiceMantri public meme battle ---- */
+let battleSocket = null;
+let battleState = null;
+const BATTLE_VOTER_TOKEN = (() => {
+  const key = "mm_voice_mantri_voter_token";
+  let token = localStorage.getItem(key);
+  if (!token) { token = (crypto.randomUUID ? crypto.randomUUID() : `voter_${Date.now()}_${Math.random().toString(36).slice(2)}`); localStorage.setItem(key, token); }
+  return token;
+})();
+function battleServerUrl() { return window.MEME_CHAT_SERVER_URL || (location.protocol === "file:" ? "http://localhost:3000" : location.origin); }
+function battleMessage(message, error = false) { const el = document.getElementById("battleSubmitMsg"); if (el) { el.textContent = message; el.style.color = error ? "#ff6b6b" : "var(--muted)"; } }
+function battleSubmission(slot) { return battleState?.submissions?.find(s => s.slot === slot) || null; }
+function battleCountdown() {
+  const el = document.getElementById("battleCountdown"); if (!el || !battleState?.endsAt) return;
+  const ms = Math.max(0, new Date(battleState.endsAt).getTime() - Date.now()); const total = Math.floor(ms / 1000);
+  el.textContent = ms > 0 ? `${String(Math.floor(total / 3600)).padStart(2, "0")}:${String(Math.floor((total % 3600) / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")} left` : "Contest settling…";
 }
-document.getElementById("battleShuffle").onclick = () => {
-  bIdx = Math.floor(Math.random() * MAIN_MEMES.length);
-  renderBattle();
+function renderBattle() {
+  if (!battleState) return;
+  const open = battleState.status === "open";
+  const status = document.getElementById("battleStatus");
+  if (status) status.textContent = open ? (battleState.submissions.length < 2 ? "Waiting for two random meme users" : "Voting is live") : "Contest settled";
+  battleCountdown();
+  ["A", "B"].forEach(slot => {
+    const item = battleSubmission(slot); const title = document.getElementById(`battleTitle${slot}`); const body = document.getElementById(`battleText${slot}`); const author = document.getElementById(`battleAuthor${slot}`); const votesEl = document.getElementById(`votes${slot}`);
+    if (title) title.textContent = item ? item.title : slot === "A" ? "Waiting for first user…" : "Waiting for second user…";
+    if (body) body.textContent = item ? item.text : slot === "A" ? "Pehla random user apni choice ke topic par meme submit karega." : "Doosra random user apni choice ke topic par competing meme submit karega.";
+    if (author) author.textContent = item ? item.author : "Open slot";
+    if (votesEl) votesEl.textContent = item ? item.votes : "0";
+    document.querySelectorAll(`[data-battle="${slot}"]`).forEach(btn => { btn.disabled = !item; });
+    document.querySelectorAll(`[data-vote="${slot}"]`).forEach(btn => { btn.disabled = !item || !open || battleState.viewerVoted || battleState.viewerSubmissionId === item.id; });
+  });
+  const submitBtn = document.getElementById("battleSubmitBtn"); if (submitBtn) submitBtn.disabled = !open || battleState.submissions.length >= 2 || !!battleState.viewerSubmissionId;
+  const winner = battleState.todayVoiceMantri; const winnerEl = document.getElementById("todayVoiceMantri");
+  if (winnerEl) winnerEl.textContent = winner ? `${winner.author} — ${winner.title} (${winner.votes} votes)` : "Aaj ka winner 24-hour contest ke baad yahan show hoga.";
+  const historyEl = document.getElementById("retiredVoiceMantriList");
+  if (historyEl) {
+    const history = battleState.retiredVoiceMantris || [];
+    historyEl.innerHTML = history.length ? history.map((entry, index) => {
+      const date = entry.settled_at ? new Date(entry.settled_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "Date unavailable";
+      return `<div class="glass card" style="margin-top:10px;padding:12px"><div class="meta"><strong>#${history.length - index} Retired VoiceMantri</strong><span>${date}</span></div><p style="margin:8px 0 4px"><strong>${entry.author}</strong> — ${entry.title}</p><small class="sub">${entry.votes} votes</small></div>`;
+    }).join("") : "<p class=\"sub\">Abhi koi retired VoiceMantri history available nahi hai.</p>";
+  }
+}
+function connectBattle() {
+  if (typeof io === "undefined") { battleMessage("Realtime contest client load nahi hua.", true); return; }
+  const serverUrl = battleServerUrl();
+  battleSocket = io(serverUrl, { transports: ["websocket", "polling"], auth: { battleVoterToken: BATTLE_VOTER_TOKEN }, reconnection: true, reconnectionAttempts: 8, timeout: 8000 });
+  battleSocket.on("connect", () => { battleSocket.emit("battle:state"); });
+  battleSocket.on("battle:state", state => { battleState = state; renderBattle(); });
+  battleSocket.on("battle:update", state => { battleState = state; renderBattle(); });
+  battleSocket.on("battle:error", ({ message }) => battleMessage(message || "Contest request failed.", true));
+  battleSocket.on("battle:submitted", () => { battleMessage("✅ Aapka meme submit ho gaya. Doosre user ka wait hai."); document.getElementById("battleTitle").value = ""; document.getElementById("battleSubmissionText").value = ""; });
+  battleSocket.on("battle:vote-accepted", () => battleMessage("✅ Vote record ho gaya. Ek user ek contest mein sirf ek vote de sakta hai."));
+  battleSocket.on("battle:settled", state => { battleState = state; renderBattle(); battleMessage("🏆 24-hour contest settle ho gaya. Today’s VoiceMantri update ho gaya."); });
+  battleSocket.on("connect_error", err => {
+    const sameOrigin = (() => { try { return new URL(serverUrl, location.href).origin === location.origin; } catch { return true; } })();
+    const netlifyStatic = /(^|\\.)netlify\\.app$/i.test(location.hostname) || /(^|\\.)netlify\\.com$/i.test(location.hostname);
+    const hint = sameOrigin && netlifyStatic
+      ? " Netlify par sirf frontend hai—server.js ko HTTPS Node hosting par chalao aur index.html mein MEME_CHAT_SERVER_URL set karo."
+      : " Backend URL, HTTPS aur CORS setting check karo.";
+    battleMessage(`Contest server se connect nahi ho pa raha: ${err?.message || "server unavailable"}.${hint}`, true);
+  });
+}
+document.getElementById("battleSubmitBtn").onclick = () => {
+  const handle = document.getElementById("battleHandle").value.trim(); const title = document.getElementById("battleTitle").value.trim(); const memeText = document.getElementById("battleSubmissionText").value.trim();
+  if (!handle || !title || !memeText) return battleMessage("Name/handle, title aur meme text teeno bharna zaroori hai.", true);
+  if (!battleSocket?.connected) return battleMessage("Contest server se connection nahi hua.", true);
+  battleSocket.emit("battle:submit", { handle, title, text: memeText });
 };
-
-document.querySelectorAll("[data-battle]").forEach(b => {
-  b.onclick = () => {
-    const v = b.dataset.battle === "A" ? voiceA.value : voiceB.value;
-    speak("battle" + b.dataset.battle, MAIN_MEMES[bIdx].text, v, 1);
-  };
-});
-
-document.querySelectorAll("[data-vote]").forEach(b => {
-  b.onclick = () => {
-    const k = b.dataset.vote;
-    votes[k]++;
-    document.getElementById("votes" + k).textContent = votes[k];
-  };
-});
-renderBattle();
+document.querySelectorAll("[data-battle]").forEach(button => { button.onclick = () => { const item = battleSubmission(button.dataset.battle); if (item) speak("battle" + button.dataset.battle, item.text, button.dataset.battle === "A" ? voiceA.value : voiceB.value, 1); }; });
+document.querySelectorAll("[data-vote]").forEach(button => { button.onclick = () => { const item = battleSubmission(button.dataset.vote); if (item && battleSocket?.connected) battleSocket.emit("battle:vote", { submissionId: item.id }); }; });
+setInterval(battleCountdown, 1000);
+connectBattle();
 
 /* ---- roast arena ---- */
 const arenas = document.getElementById("arenas");

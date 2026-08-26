@@ -88,24 +88,32 @@
   </div></section>
 
   <section id="battle"><div class="wrap">
-    <h2>Kaun banega Voice Mantri?</h2>
-    <p class="sub">Same meme, two voices. You decide who wins the mic.</p>
-    <div class="two">
-      <div class="glass card">
-        <span class="tag">Rulling Party</span>
-        <select id="voiceA"></select>
-        <button class="btn btn-primary" data-battle="A">▶ Play Voice A</button>
-        <button class="btn btn-ghost" data-vote="A">🗳 Vote A (<span id="votesA">0</span>)</button>
+    <h2>🏆 Kaun Banega VoiceMantri?</h2>
+    <p class="sub">Do random users apni marzi ke kisi bhi topic par apna best meme submit karenge. Public vote karegi; 24 hours baad winner declare hoga.</p>
+    <div class="glass card" style="margin-top:20px">
+      <div class="meta"><span id="battleStatus">Contest loading…</span><span id="battleCountdown">24:00:00 left</span></div>
+      <div class="two" style="margin-top:16px">
+        <input id="battleHandle" type="text" placeholder="Your name / handle e.g. @meme_neta" maxlength="60" />
+        <input id="battleTitle" type="text" placeholder="Your meme title" maxlength="120" />
       </div>
-      <div class="glass card">
-        <span class="tag">Opposition Party</span>
-        <select id="voiceB"></select>
-        <button class="btn btn-green" data-battle="B">▶ Play Voice B</button>
-        <button class="btn btn-ghost" data-vote="B">🗳 Vote B (<span id="votesB">0</span>)</button>
+      <textarea id="battleSubmissionText" rows="3" placeholder="Apna meme likho — topic aapki choice hai…" maxlength="700" style="width:100%;margin-top:10px;box-sizing:border-box;resize:vertical"></textarea>
+      <button class="btn btn-primary" id="battleSubmitBtn" style="margin-top:10px">📮 Submit My Meme</button>
+      <p id="battleSubmitMsg" class="sub" style="min-height:20px;margin-top:10px"></p>
+    </div>
+    <div class="two" style="margin-top:20px">
+      <div class="glass card" id="battleCardA">
+        <span class="tag">Meme A</span><h3 id="battleTitleA">Waiting for first user…</h3><p id="battleTextA">Pehla user apne choice ke topic par meme submit kar sakta hai.</p>
+        <div class="meta"><span id="battleAuthorA">Open slot</span><span><strong id="votesA">0</strong> votes</span></div>
+        <select id="voiceA"></select><button class="btn btn-primary" data-battle="A" disabled>🔊 Narrate A</button><button class="btn btn-ghost" data-vote="A" disabled>🗳 Vote A</button>
+      </div>
+      <div class="glass card" id="battleCardB">
+        <span class="tag">Meme B</span><h3 id="battleTitleB">Waiting for second user…</h3><p id="battleTextB">Doosra user apne choice ke topic par competing meme submit kar sakta hai.</p>
+        <div class="meta"><span id="battleAuthorB">Open slot</span><span><strong id="votesB">0</strong> votes</span></div>
+        <select id="voiceB"></select><button class="btn btn-green" data-battle="B" disabled>🔊 Narrate B</button><button class="btn btn-ghost" data-vote="B" disabled>🗳 Vote B</button>
       </div>
     </div>
-    <div class="glass card" style="margin-top:20px"><p id="battleText"></p>
-      <button class="btn btn-ghost" id="battleShuffle">🎲 Shuffle Meme</button></div>
+    <div class="glass card" style="margin-top:20px"><span class="tag">Today’s VoiceMantri</span><p id="todayVoiceMantri">Aaj ka winner 24-hour contest ke baad yahan show hoga.</p></div>
+    <details class="glass card" style="margin-top:20px"><summary style="cursor:pointer;font-weight:700">🏛 Retired VoiceMantri</summary><div id="retiredVoiceMantriList" style="margin-top:14px"><p class="sub">Abhi koi retired VoiceMantri history available nahi hai.</p></div></details>
   </div></section>
 
   <section id="roast"><div class="wrap">
@@ -278,6 +286,8 @@
 
 </footer>
 
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" crossorigin="anonymous"></script>
+  <script>window.MEME_CHAT_SERVER_URL = window.MEME_CHAT_SERVER_URL || (location.protocol === "file:" ? "http://localhost:3000" : location.origin);</script>
   <script src="mm.js"></script>
 </body>
 </html>
