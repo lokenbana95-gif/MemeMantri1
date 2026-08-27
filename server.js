@@ -581,8 +581,11 @@ app.get(`${ADMIN_ROUTE}/api/backup`, requireAdmin, requireSuperAdmin, (req, res)
   res.download(BATTLE_DB_PATH, "mememantri-backup.db");
 });
 
-app.get(`${ADMIN_ROUTE}/`, (_req, res) => { res.set("Cache-Control", "no-store"); res.sendFile(path.join(__dirname, "admin.html")); });
-app.get(ADMIN_ROUTE, (_req, res) => res.redirect(`${ADMIN_ROUTE}/`));
+app.get([`${ADMIN_ROUTE}/`, ADMIN_ROUTE], (req, res) => {
+  if (!req.path.endsWith("/")) return res.redirect(301, `${ADMIN_ROUTE}/`);
+  res.set("Cache-Control", "no-store");
+  res.sendFile(path.join(__dirname, "admin.html"));
+});
 app.get(`${ADMIN_ROUTE}/admin.js`, (_req, res) => { res.set("Cache-Control", "no-store"); res.sendFile(path.join(__dirname, "admin.js")); });
 app.get(["/admin", "/admin/", "/admin.html", "/admin.js"], (_req, res) => res.status(404).send("Not found"));
 
