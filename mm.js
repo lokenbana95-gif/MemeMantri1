@@ -601,21 +601,6 @@ renderUserGrid();
 
 /* Meme Adda now lives on adda.html. */
 
-/* ---- day/night mode toggle ---- */
-const themeToggleBtn = document.getElementById("themeToggle");
-function applyThemeIcon() {
-  if (!themeToggleBtn) return;
-  themeToggleBtn.textContent = document.documentElement.classList.contains("light-theme") ? "☀️" : "🌙";
-}
-if (themeToggleBtn) {
-  applyThemeIcon();
-  themeToggleBtn.onclick = () => {
-    document.documentElement.classList.toggle("light-theme");
-    localStorage.setItem("mm_theme", document.documentElement.classList.contains("light-theme") ? "light" : "dark");
-    applyThemeIcon();
-  };
-}
-
 /* ---- smooth scroll nav ---- */
 document.querySelectorAll("[data-jump]").forEach(b => {
   b.onclick = () => {
