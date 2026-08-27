@@ -10,12 +10,6 @@
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="mm1.css" />
   <!-- Speech narration is browser-native. Socket.IO is loaded only for optional online Meme Adda chat. -->
-  <script>
-    (function () {
-      var saved = localStorage.getItem("mm_theme");
-      if (saved === "light") document.documentElement.classList.add("light-theme");
-    })();
-  </script>
 </head>
 <body>
   <header>
@@ -33,7 +27,6 @@
           <a class="nav-link" href="adda.html">💬 Meme Adda</a>
           <a class="nav-link" href="global.html">🌍 Global Mantri</a>
           <button data-jump="submit">Drop Meme</button>
-          <button id="themeToggle" type="button" aria-label="Toggle day/night mode" title="Day/Night mode">🌙</button>
         </div>
       </nav>
     </div>
