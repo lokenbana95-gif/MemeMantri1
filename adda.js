@@ -22,6 +22,9 @@ const acceptBtn = document.getElementById("acceptInviteBtn");
 const rejectBtn = document.getElementById("rejectInviteBtn");
 const inviteHint = document.getElementById("inviteHint");
 const notifyBtn = document.getElementById("notifyBtn");
+MMIdentity.bindPill(document.getElementById("identityPill"), newName => {
+  if (state.socket?.connected) state.socket.emit("identity:update", { displayName: newName });
+});
 function setStatus(text, strong = false) { statusEl.textContent = text; if (strong) statusEl.innerHTML = `🟢 <strong>${text}</strong>`; }
 function appendMessage(who, text) { const row = document.createElement("div"); row.className = `adda-msg ${who}`; row.textContent = text; messagesEl.appendChild(row); messagesEl.scrollTop = messagesEl.scrollHeight; }
 function appendSystem(text) { appendMessage("system", text); }
@@ -44,7 +47,7 @@ function showMode(mode) {
 function connectSocket() {
   if (state.socket?.connected) return state.socket;
   if (typeof io === "undefined") { setStatus("Socket.IO load nahi hua. Chat server check karo."); return null; }
-  state.socket = io(SOCKET_SERVER_URL, { transports: ["websocket", "polling"], reconnection: true, reconnectionAttempts: 8, timeout: 8000 });
+  state.socket = io(SOCKET_SERVER_URL, { transports: ["websocket", "polling"], auth: { displayName: MMIdentity.ensure() }, reconnection: true, reconnectionAttempts: 8, timeout: 8000 });
   state.socket.on("connect", () => { state.connected = true; updateControls(); setStatus("Online server connected", true); if (state.mode === "chat") findChat(); if (state.mode === "debate" && state.searching) findDebate(); if (state.mode === "channel") loadChannels(); });
   state.socket.on("connect_error", error => { state.connected = false; setStatus(`Online server se connect nahi ho pa raha: ${error?.message || "server unavailable"}`); });
   state.socket.io.on("reconnect_attempt", attempt => setStatus(`Server reconnect attempt ${attempt}/8…`));
