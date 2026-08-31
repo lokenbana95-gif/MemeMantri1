@@ -200,11 +200,27 @@ function settleVoiceContest(contestId) {
   const contest = db.prepare("SELECT * FROM voice_contests WHERE id = ? AND status = 'open'").get(contestId);
   if (!contest) return false;
   const entries = db.prepare("SELECT * FROM voice_submissions WHERE contest_id = ? ORDER BY votes DESC, created_at ASC, id ASC").all(contestId);
-  const winner = entries.length === 2 ? entries[0] : null;
+  const winner = entries.length > 0 ? entries[0] : null;
   const now = Date.now();
   db.prepare("UPDATE voice_contests SET status = 'settled', settled_at = ?, winner_submission_id = ?, winner_author = ?, winner_title = ?, winner_votes = ? WHERE id = ?").run(now, winner?.id || null, winner?.author || null, winner?.title || null, winner?.votes || 0, contestId);
   return true;
 }
+/* One-time repair: earlier versions only saved a winner when a contest had
+   exactly 2 submissions, so any contest settled with 1 submission (e.g. the
+   2nd meme arrived after the 24-hour window and landed in a fresh contest)
+   silently lost its history even though the raw submission was never
+   deleted. Backfill those from voice_submissions so old VoiceMantris
+   reappear after this fix is deployed. */
+function backfillMissingVoiceHistory() {
+  const broken = db.prepare("SELECT id FROM voice_contests WHERE status = 'settled' AND winner_submission_id IS NULL").all();
+  broken.forEach(({ id }) => {
+    const entries = db.prepare("SELECT * FROM voice_submissions WHERE contest_id = ? ORDER BY votes DESC, created_at ASC, id ASC").all(id);
+    if (!entries.length) return;
+    const winner = entries[0];
+    db.prepare("UPDATE voice_contests SET winner_submission_id = ?, winner_author = ?, winner_title = ?, winner_votes = ? WHERE id = ?").run(winner.id, winner.author, winner.title, winner.votes, id);
+  });
+}
+backfillMissingVoiceHistory();
 function ensureVoiceContest() {
   let contest = openVoiceContest();
   if (contest && contest.ends_at <= Date.now()) { settleVoiceContest(contest.id); contest = null; }
