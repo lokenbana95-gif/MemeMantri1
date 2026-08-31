@@ -563,6 +563,18 @@ document.getElementById("userMemeGrid").onclick = e => {
   currentId === m.id ? stopSpeak() : speak(m.id, m.text, voiceSel.value, speedVal);
 };
 
+/* ---- MemeMantri identity: one fixed name for VoiceMantri + meme submissions + Meme Adda ---- */
+function applyIdentityToForms() {
+  const myName = MMIdentity.get();
+  if (!myName) return;
+  const handleInput = document.getElementById("battleHandle");
+  const creatorInput = document.getElementById("subCreator");
+  if (handleInput && !handleInput.value.trim()) handleInput.value = myName;
+  if (creatorInput && !creatorInput.value.trim()) creatorInput.value = myName;
+}
+MMIdentity.bindPill(document.getElementById("identityPill"), () => applyIdentityToForms());
+applyIdentityToForms();
+
 document.getElementById("subBtn").onclick = async () => {
   const title = document.getElementById("subTitle").value.trim();
   const text = document.getElementById("subText").value.trim();
@@ -585,6 +597,7 @@ document.getElementById("subBtn").onclick = async () => {
     document.getElementById("subTitle").value = "";
     document.getElementById("subText").value = "";
     document.getElementById("subCreator").value = "";
+    applyIdentityToForms();
   } catch (err) {
     /* server unreachable — fall back to local-only preview so the page still works */
     const meme = { id: "u" + Date.now(), title, text, category: cat, creator, likes: 0, plays: 0, userSubmitted: true };
