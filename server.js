@@ -715,18 +715,8 @@ io.use((socket, next) => {
   if (isIpBanned(clientSocketIp(socket))) return next(new Error("banned"));
   next();
 });
-function sanitizeDisplayName(raw) {
-  let name = String(raw || "").trim().replace(/\s+/g, " ").slice(0, 40);
-  if (!name) return "";
-  name = name.replace(/^@+/, "");
-  return name ? censorText("@" + name) : "";
-}
 io.on("connection", socket => {
-  socket.data.displayName = sanitizeDisplayName(socket.handshake.auth?.displayName) || randomName();
-  socket.on("identity:update", payload => {
-    const name = sanitizeDisplayName(payload?.displayName);
-    if (name) socket.data.displayName = name;
-  });
+  socket.data.displayName = randomName();
   socket.on("channel:list", () => socket.emit("channel:list", publicChannels()));
   socket.on("channel:create", payload => {
     const name = safeChannelName(payload?.name); if (!name) return socket.emit("channel:error", { message: "Channel name required hai." });
